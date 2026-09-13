@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>管理员个人中心 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo"><h2>ResumeMatch</h2><span>管理后台</span></div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info" onclick="location.href='/pages/admin/profile.html'">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'A' }}</div>
+                <div>
+                    <div class="user-name">{{ currentUser?.realName || '管理员' }}</div>
+                    <div class="user-role">系统管理员</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">管理员个人中心</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" @click="logout">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+                <!-- Profile Card -->
+                <div class="card">
+                    <div class="card-header"><h3>管理员信息</h3></div>
+                    <div class="card-body">
+                        <div style="text-align:center;margin-bottom:20px">
+                            <div style="width:72px;height:72px;border-radius:50%;background:var(--primary-gradient);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:28px;font-weight:700">{{ profile.realName?.[0] || profile.username?.[0] || 'A' }}</div>
+                            <div style="font-size:16px;font-weight:600;margin-top:8px">{{ profile.realName || profile.username }}</div>
+                            <span class="badge badge-primary">系统管理员</span>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">用户名</label>
+                            <input class="form-input" :value="profile.username" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">真实姓名</label>
+                            <input class="form-input" v-model="profile.realName" placeholder="请输入真实姓名">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">手机号</label>
+                            <input class="form-input" v-model="profile.phone" placeholder="请输入手机号码">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">邮箱</label>
+                            <input class="form-input" v-model="profile.email" placeholder="请输入邮箱地址">
+                        </div>
+                        <button class="btn btn-primary" @click.stop.native="saveProfile" :disabled="isSubmit">
+                            {{ isSubmit ? '保存中...' : '保存修改' }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Password Card -->
+                <div class="card">
+                    <div class="card-header"><h3>修改密码</h3></div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label class="form-label">原密码</label>
+                            <input type="password" class="form-input" v-model="pwd.oldPassword" placeholder="请输入当前密码">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">新密码</label>
+                            <input type="password" class="form-input" v-model="pwd.newPassword" placeholder="至少6位">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">确认新密码</label>
+                            <input type="password" class="form-input" v-model="pwd.confirmPassword" placeholder="再次输入新密码">
+                        </div>
+                        <button class="btn btn-primary" @click.stop.native="changePassword" :disabled="isPwdSubmit">
+                            {{ isPwdSubmit ? '修改中...' : '修改密码' }}
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div style="margin-top:30px;text-align:center">
+                <button class="btn btn-danger" @click="logout">退出登录</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data() {
+            return {
+                currentUser: null,
+                profile:{},
+                pwd:{ oldPassword:'', newPassword:'', confirmPassword:'' },
+                loading:false,
+                isSubmit: false,
+                isPwdSubmit: false
+            };
+        },
+        mounted() {
+            const user = initLayout('admin');
+            if (!user) return;
+
+            // 只允许管理员访问
+            if (user.role !== 1) {
+                Toast.error('无权访问管理员页面');
+                location.href = '/pages/user/job-list.html';
+                return;
+            }
+
+            this.currentUser = user;
+            this.loadProfile();
+        },
+        methods: {
+            async loadProfile() {
+                this.loading = true;
+                try {
+                    const res = await Api.get('user/profile');
+                    if (res.code === 200) this.profile = res.data;
+                } catch(e) {
+                    Toast.error('加载失败');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async saveProfile() {
+                if (this.isSubmit) return;
+                if (!this.profile.realName) {
+                    Toast.warning('请填写真实姓名');
+                    return;
+                }
+                this.isSubmit = true;
+                try {
+                    const res = await Api.put('user/profile', {
+                        realName: this.profile.realName,
+                        phone: this.profile.phone,
+                        email: this.profile.email
+                    });
+                    if (res.code === 200) {
+                        Toast.success('保存成功');
+                        this.currentUser.realName = this.profile.realName;
+                        Auth.saveUser(this.currentUser);
+                    }
+                } catch(e) {
+                } finally {
+                    this.isSubmit = false;
+                }
+            },
+            async changePassword() {
+                if (this.isPwdSubmit) return;
+                if (!this.pwd.oldPassword) { Toast.warning('请输入原密码'); return; }
+                if (this.pwd.newPassword.length < 6) { Toast.warning('新密码至少6位'); return; }
+                if (this.pwd.newPassword !== this.pwd.confirmPassword) { Toast.warning('两次密码不一致'); return; }
+
+                this.isPwdSubmit = true;
+                try {
+                    const res = await Api.put('user/password', {
+                        oldPassword: this.pwd.oldPassword,
+                        newPassword: this.pwd.newPassword
+                    });
+                    if (res.code === 200) {
+                        Toast.success('密码修改成功');
+                        this.pwd = { oldPassword:'', newPassword:'', confirmPassword:'' };
+                    } else {
+                        Toast.error(res.message);
+                    }
+                } catch(e) {
+                    Toast.error('修改失败');
+                } finally {
+                    this.isPwdSubmit = false;
+                }
+            },
+            logout() {
+                if (confirm('确定要退出登录吗？')) {
+                    Toast.success('已退出登录');
+                    setTimeout(() => {
+                        Auth.logout();
+                    }, 500);
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>我的投递 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo"><h2>ResumeMatch</h2><span>简历智能匹配系统</span></div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer"><div class="user-info"><div class="user-avatar">{{ currentUser?.realName?.[0] || 'U' }}</div><div><div class="user-name">{{ currentUser?.realName || '用户' }}</div><div class="user-role">求职者</div></div></div></div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar"><div class="topbar-breadcrumb">我的投递</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" onclick="Auth.logout()">退出登录</button></div></header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+
+            <div class="filter-tabs mb-20">
+                <span class="filter-tab" :class="{active:statusFilter===null}" @click="statusFilter=null;loadData()">全部</span>
+                <span class="filter-tab" :class="{active:statusFilter===1}" @click="statusFilter=1;loadData()">待查看</span>
+                <span class="filter-tab" :class="{active:statusFilter===2}" @click="statusFilter=2;loadData()">已查看</span>
+                <span class="filter-tab" :class="{active:statusFilter===3}" @click="statusFilter=3;loadData()">面试通知</span>
+                <span class="filter-tab" :class="{active:statusFilter===4}" @click="statusFilter=4;loadData()">已拒绝</span>
+                <span class="filter-tab" :class="{active:statusFilter===5}" @click="statusFilter=5;loadData()">已录取</span>
+            </div>
+
+            <div class="table-wrap" v-if="apps.length">
+                <table><thead><tr><th>岗位</th><th>公司</th><th>简历</th><th>匹配分</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+                <tbody>
+                    <tr v-for="a in apps" :key="a.id">
+                        <td>{{ a.jobName || a.jobTitle }}</td>
+                        <td>{{ a.companyName || a.company }}</td>
+                        <td>{{ a.resumeName || a.resumeTitle }}</td>
+                        <td><span class="match-score" :class="$utils.getMatchClass(a.matchScore)">{{ a.matchScore || '-' }}</span></td>
+                        <td><span class="badge" :class="$utils.getStatusClass(a.status)">{{ $utils.getStatusText(a.status) }}</span></td>
+                        <td>{{ $utils.formatDate(a.createTime) }}</td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" v-if="a.status === 1" @click="withdraw(a.id)">撤回</button>
+                            <span v-else class="text-muted text-sm">--</span>
+                        </td>
+                    </tr>
+                </tbody></table>
+            </div>
+            <div class="empty-state" v-else-if="!loading"><div class="empty-icon">📋</div><div class="empty-text">暂无投递记录</div></div>
+        </div>
+    </main>
+</div>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+createVueApp({
+    data() { return { apps:[], statusFilter:null, loading:false }; },
+    mounted() {
+        const user = initLayout('user'); if (!user) return;
+        this.currentUser = user; this.loadData();
+    },
+    methods: {
+        async loadData() {
+            this.loading = true;
+            try {
+                const params = { page:1, size:100 };
+                if (this.statusFilter) params.status = this.statusFilter;
+                const res = await Api.get('application/my', params);
+                if (res.code === 200) this.apps = res.data.records || [];
+            } catch(e) { Toast.error('加载失败'); }
+            finally { this.loading = false; }
+        },
+        async withdraw(id) {
+            if (!confirm('确定撤回此投递?')) return;
+            try { const res = await Api.delete('application/' + id);
+                if (res.code === 200) { Toast.success('已撤回'); this.loadData(); }
+                else Toast.error(res.message);
+            } catch(e) { Toast.error('操作失败'); }
+        }
+    }
+});
+</script>
+</body>
+</html>

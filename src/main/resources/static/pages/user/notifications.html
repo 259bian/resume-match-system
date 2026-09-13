@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>消息通知 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo">
+            <h2>ResumeMatch</h2>
+            <span>简历智能匹配系统</span>
+        </div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'U' }}</div>
+                <div>
+                    <div class="user-name">{{ currentUser?.realName || '用户' }}</div>
+                    <div class="user-role">求职者</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">消息通知</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" onclick="Auth.logout()">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+            <div class="flex-between mb-20">
+                <div class="filter-tabs">
+                    <span class="filter-tab" :class="{active:typeFilter===null}" @click="typeFilter=null;loadData()">全部</span>
+                    <span class="filter-tab" :class="{active:typeFilter===1}" @click="typeFilter=1;loadData()">投递成功</span>
+                    <span class="filter-tab" :class="{active:typeFilter===2}" @click="typeFilter=2;loadData()">面试通知</span>
+                    <span class="filter-tab" :class="{active:typeFilter===3}" @click="typeFilter=3;loadData()">已拒绝</span>
+                    <span class="filter-tab" :class="{active:typeFilter===4}" @click="typeFilter=4;loadData()">系统消息</span>
+                </div>
+                <button class="btn btn-outline btn-sm" @click="markAllRead">全部已读</button>
+            </div>
+
+            <div v-if="notifs.length">
+                <div v-for="n in notifs" :key="n.id" class="card mb-12" style="cursor:pointer" @click="markRead(n)">
+                    <div class="card-body" style="padding:16px 20px">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <div>
+                                <span :style="{fontWeight: n.isRead ? 'normal' : '700'}">{{ n.title }}</span>
+                                <span class="badge ml-8" :class="getTypeClass(n.type)" style="margin-left:8px">{{ getTypeText(n.type) }}</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:12px">
+                                <span class="text-sm text-muted">{{ $utils.formatDate(n.createTime) }}</span>
+                                <button class="btn btn-sm btn-outline" @click.stop="deleteNotif(n.id)">删除</button>
+                            </div>
+                        </div>
+                        <div class="text-sm text-muted mt-8">{{ n.content }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="empty-state" v-else-if="!loading">
+                <div class="empty-icon">🔔</div>
+                <div class="empty-text">暂无通知</div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data() {
+            return {
+                notifs: [],
+                typeFilter: null,
+                loading: false
+            };
+        },
+        mounted() {
+            const user = initLayout('user');
+            if (!user) return;
+            this.loadData();
+        },
+        methods: {
+            async loadData() {
+                this.loading = true;
+                try {
+                    const params = { page:1, size:100 };
+                    if (this.typeFilter) params.type = this.typeFilter;
+                    const res = await Api.get('notification/my', params);
+                    if (res.code === 200) {
+                        this.notifs = res.data.records || [];
+                    }
+                } catch (e) {
+                    Toast.error('加载失败');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async markRead(n) {
+                if (n.isRead) return;
+                try {
+                    await Api.put('notification/' + n.id + '/read');
+                    n.isRead = 1;
+                } catch(e) {}
+            },
+            async markAllRead() {
+                try {
+                    await Api.put('notification/read-all');
+                    Toast.success('已全部标记');
+                    this.loadData();
+                } catch(e) {
+                    Toast.error('操作失败');
+                }
+            },
+            async deleteNotif(id) {
+                try {
+                    await Api.delete('notification/' + id);
+                    Toast.success('已删除');
+                    this.loadData();
+                } catch(e) {
+                    Toast.error('操作失败');
+                }
+            },
+            getTypeText(t) {
+                const m = {1:'投递成功',2:'面试通知',3:'已拒绝',4:'系统消息'};
+                return m[t] || '其他';
+            },
+            getTypeClass(t) {
+                const m = {1:'badge-success',2:'badge-interview',3:'badge-danger',4:'badge-info'};
+                return m[t] || '';
+            }
+        }
+    });
+</script>
+</body>
+</html>

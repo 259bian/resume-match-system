@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>我的简历 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo">
+            <h2>ResumeMatch</h2>
+            <span>简历智能匹配系统</span>
+        </div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'U' }}</div>
+                <div>
+                    <div class="user-name">{{ currentUser?.realName || '用户' }}</div>
+                    <div class="user-role">{{ currentUser?.role === 1 ? '管理员' : '求职者' }}</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">我的简历</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" @click="logout">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading">
+                <div class="spinner"></div>
+            </div>
+
+            <div class="flex-between mb-20">
+                <h3 style="font-size:18px;font-weight:600">简历列表</h3>
+                <div>
+                    <input type="file" ref="fileInput" accept=".pdf,.doc,.docx" style="display:none" @change="handleUpload">
+                    <button class="btn btn-primary" @click="$refs.fileInput.click()">+ 上传简历</button>
+                </div>
+            </div>
+
+            <div v-if="resumes.length && !loading">
+                <div class="card mb-12" v-for="r in resumes" :key="r.id">
+                    <div class="card-body" style="display:flex;align-items:center;gap:16px;padding:16px 20px">
+                        <div style="font-size:28px">
+                            {{ r.fileType === 'pdf' ? '📄' : '📝' }}
+                        </div>
+                        <div style="flex:1">
+                            <div style="font-weight:600;font-size:15px;margin-bottom:4px">{{ r.title }}</div>
+                            <div class="text-sm text-muted">
+                                {{ r.fileName }} · {{ (r.fileSize/1024).toFixed(0) }}KB · 版本{{ r.currentVersion }} · {{ $utils.formatDate(r.createTime) }}
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:8px">
+                            <!-- <button class="btn btn-outline btn-sm" @click="batchMatch(r.id)">🔍 匹配</button> -->
+                            <button class="btn btn-outline btn-sm" @click="toOptimize(r.id)">✨ 优化</button>
+                            <button class="btn btn-outline btn-sm" @click="toEdit(r.id)">✏️ 编辑</button>
+                            <button class="btn btn-danger btn-sm" @click="deleteResume(r.id)">🗑️ 删除</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="empty-state" v-else-if="!loading">
+                <div class="empty-icon">📄</div>
+                <div class="empty-text">暂无简历</div>
+                <div class="empty-hint">点击上传简历添加您的第一份简历</div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data() {
+            return {
+                currentUser: null,
+                resumes: [],
+                loading: false
+            };
+        },
+        mounted() {
+            const user = initLayout('user');
+            if (!user) return;
+            this.currentUser = user;
+            this.loadResumes();
+        },
+        methods: {
+            async loadResumes() {
+                this.loading = true;
+                try {
+                    const res = await Api.get('resume/my', { page: 1, size: 100 });
+                    if (res.code === 200) {
+                        this.resumes = res.data.records || [];
+                    }
+                } catch (e) {
+                    Toast.error('加载失败');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async handleUpload(e) {
+                console.log('handleUpload 被调用了！', e);
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('title', file.name.replace(/\.[^.]+$/, ''));
+
+                this.loading = true;
+                try {
+                    const res = await Api.postForm('resume/upload', formData);
+                    if (res.code === 200) {
+                        Toast.success('上传成功');
+                        this.loadResumes();
+                    } else {
+                        Toast.error(res.message || '上传失败2');
+                    }
+                } catch (e) {
+                    console.error('报错信息：', e);
+                    Toast.error('上传失败1',e);
+                } finally {
+                    this.loading = false;
+                    e.target.value = '';
+                }
+            },
+            async deleteResume(id) {
+                if (!confirm('确定删除此简历？删除后无法恢复')) return;
+                try {
+                    const res = await Api.delete('resume/' + id);
+                    if (res.code === 200) {
+                        Toast.success('删除成功');
+                        this.loadResumes();
+                    } else {
+                        Toast.error(res.message);
+                    }
+                } catch (e) {
+                    Toast.error('删除失败');
+                }
+            },
+            async batchMatch(resumeId) {
+                if(confirm('确定使用该简历进行岗位匹配？')){
+                    this.loading = true;
+                    try {
+                        const res = await Api.post('match/batch/' + resumeId);
+                        if (res.code === 200) {
+                            Toast.success('匹配完成，正在跳转到结果页');
+                            setTimeout(() => location.href = '/pages/user/match-result.html', 800);
+                        } else {
+                            Toast.error(res.message || '匹配失败');
+                        }
+                    } catch (e) {
+                        Toast.error('匹配失败，请检查后端服务');
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            },
+            toEdit(id){
+                location.href = `/pages/user/resume-edit.html?id=${id}`;
+            },
+            toOptimize(id){
+                location.href = `/pages/user/resume-optimize.html?id=${id}`;
+            },
+            logout() {
+                if (1) {
+                    Toast.success('已退出登录');
+                    setTimeout(() => Auth.logout(), 600);
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

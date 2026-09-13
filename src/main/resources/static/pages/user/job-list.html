@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>岗位列表 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo">
+            <h2>ResumeMatch</h2>
+            <span>简历智能匹配系统</span>
+        </div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'U' }}</div>
+                <div>
+                    <div class="user-name">{{ currentUser?.realName || '用户' }}</div>
+                    <div class="user-role">求职者</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">岗位列表</div>
+            <div class="topbar-actions">
+                <button class="notify-btn" onclick="location.href='/pages/user/notifications.html'">🔔<span class="notify-dot" id="notifyDot" style="display:none"></span></button>
+                <button class="btn btn-outline btn-sm" onclick="Auth.logout()">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+
+            <div class="search-bar" style="margin-bottom:16px">
+                <input type="text" class="form-input" v-model="keyword" placeholder="搜索岗位/公司/技能..." @keyup.enter="search" style="width:280px">
+                <select class="form-select" v-model="category" @change="search" style="width:140px">
+                    <option value="">全部分类</option>
+                    <option v-for="c in categories" :value="c">{{ c }}</option>
+                </select>
+                <select class="form-select" v-model="location" @change="search" style="width:140px">
+                    <option value="">全部地点</option>
+                    <option v-for="l in locations" :value="l">{{ l }}</option>
+                </select>
+                <button class="btn btn-primary" @click="search">搜索</button>
+            </div>
+
+            <div class="job-grid" v-if="jobs.length">
+                <div class="job-card" v-for="job in jobs" :key="job.id" @click="goDetail(job.id)">
+                    <div class="job-title">{{ job.title }}</div>
+                    <div class="job-company">{{ job.company }}</div>
+                    <div class="job-tags">
+                        <span class="tag" v-for="s in (job.skills||'').split(',').filter(i=>i.trim())" :key="s">{{ s.trim() }}</span>
+                    </div>
+                    <div class="job-meta">
+                        <span>📍 {{ job.location || '不限' }}</span>
+                        <span>📅 {{ job.experience || '不限' }}</span>
+                        <span>🎓 {{ job.education || '不限' }}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+                        <span class="job-salary">{{ Utils?.formatSalary ? Utils.formatSalary(job.salary) : job.salary }}</span>
+                        <span class="text-muted text-sm">👁 {{ job.viewCount || 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="empty-state" v-else-if="!loading">
+                <div class="empty-icon">🔍</div>
+                <div class="empty-text">暂无岗位信息</div>
+            </div>
+
+            <div class="pagination" v-if="total > size">
+                <button :disabled="page <= 1" @click="page--;loadJobs()">上一页</button>
+                <button v-for="p in pages" :class="{ active: p === page }" @click="page = p; loadJobs()">{{ p }}</button>
+                <button :disabled="page >= pages.length" @click="page++;loadJobs()">下一页</button>
+                <span class="page-info">共 {{ total }} 条</span>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    const user = initLayout?.('user') || null;
+    if (!user) {
+        setTimeout(() => {
+            location.href = '/login.html';
+        }, 100);
+    }
+
+    const { createApp } = Vue;
+    createApp({
+        data() {
+            return {
+                currentUser: user || null,
+                loading: false,
+                jobs:[], total:0, page:1, size:10,
+                keyword:'', category:'', location:'',
+                categories:[], locations:[], pages:[]
+            };
+        },
+        mounted() {
+            this.loadJobs();
+            this.loadFilters();
+        },
+        methods: {
+            async loadJobs() {
+                this.loading = true;
+                try {
+                    const res = await Api?.get?.('job/list', {
+                        page: this.page,
+                        size: this.size,
+                        keyword: this.keyword,
+                        category: this.category,
+                        location: this.location
+                    }) || {};
+                    if (res.code === 200 && res.data) {
+                        this.jobs = res.data.records || [];
+                        this.total = res.data.total || 0;
+                        const totalPages = Math.ceil(this.total / this.size);
+                        this.pages = Array.from({length: Math.min(totalPages, 10)}, (_,i) => i+1);
+                    }
+                } catch(e) {
+                    console.error("加载岗位失败", e);
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async loadFilters() {
+                try {
+                    const res = await Api?.get?.('job/all') || {};
+                    if (res.code === 200 && res.data) {
+                        this.categories = [...new Set((res.data || []).map(j => j.category).filter(Boolean))];
+                        this.locations = [...new Set((res.data || []).map(j => j.location).filter(Boolean))];
+                    }
+                } catch(e) {
+                    console.error("加载筛选条件失败", e);
+                }
+            },
+            search() {
+                this.page = 1;
+                this.loadJobs();
+            },
+            goDetail(id) {
+                if(id) location.href = '/pages/user/job-detail.html?id=' + id;
+            }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

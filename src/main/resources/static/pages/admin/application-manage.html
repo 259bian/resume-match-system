@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投递管理 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo"><h2>ResumeMatch</h2><span>管理后台</span></div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info" onclick="location.href='/pages/admin/profile.html'">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'A' }}</div>
+                <div><div class="user-name">{{ currentUser?.realName || '管理员' }}</div><div class="user-role">系统管理员</div></div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">投递管理</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" @click="exportApps">导出Excel</button>
+                <button class="btn btn-outline btn-sm" onclick="Auth.logout()">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+
+            <h3 style="font-size:18px;font-weight:600;margin-bottom:16px">投递记录</h3>
+
+            <div class="filter-tabs mb-20">
+                <span class="filter-tab" :class="{active:statusFilter===null}" @click="statusFilter=null;search()">全部</span>
+                <span class="filter-tab" :class="{active:statusFilter===1}" @click="statusFilter=1;search()">待查看</span>
+                <span class="filter-tab" :class="{active:statusFilter===2}" @click="statusFilter=2;search()">已查看</span>
+                <span class="filter-tab" :class="{active:statusFilter===3}" @click="statusFilter=3;search()">面试通知</span>
+                <span class="filter-tab" :class="{active:statusFilter===4}" @click="statusFilter=4;search()">已拒绝</span>
+                <span class="filter-tab" :class="{active:statusFilter===5}" @click="statusFilter=5;search()">已录取</span>
+            </div>
+
+            <div class="card" v-if="apps.length">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr><th>ID</th><th>申请人</th><th>岗位</th><th>公司</th><th>简历</th><th>匹配分数</th><th>状态</th><th>投递时间</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                        <tr v-for="a in apps" :key="a.id">
+                            <td>{{ a.id }}</td>
+                            <td>{{ a.userName || a.userId || '--' }}</td>
+                            <td>{{ a.jobTitle || a.jobName || '--' }}</td>
+                            <td>{{ a.companyName || a.company || '--' }}</td>
+                            <td>{{ a.resumeTitle || a.resumeName || '--' }}</td>
+                            <td>
+                                <span class="match-score" :class="getMatchClass(a.matchScore)" v-if="a.matchScore">{{ a.matchScore }}</span>
+                                <span v-else>--</span>
+                            </td>
+                            <td>
+                                <span class="badge" :class="getStatusClass(a.status)">{{ getStatusText(a.status) }}</span>
+                            </td>
+                            <td>{{ formatDate(a.createTime) }}</td>
+                            <td><button class="btn btn-outline btn-sm" @click="openStatusModal(a)">更新状态</button></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="empty-state" v-else-if="!loading">
+                <div class="empty-icon">📋</div>
+                <div class="empty-text">暂无投递记录</div>
+            </div>
+
+            <div class="pagination" v-if="total > size">
+                <button class="btn btn-outline btn-sm" :disabled="page<=1" @click="page--;loadData()">上一页</button>
+                <span class="page-info">{{ page }} / {{ Math.ceil(total/size)||1 }}</span>
+                <button class="btn btn-outline btn-sm" :disabled="page>=Math.ceil(total/size)" @click="page++;loadData()">下一页</button>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="statusModal" style="display:none">
+        <div class="modal-box" style="width:480px">
+            <div class="modal-header">
+                <h3>更新投递状态</h3>
+                <button class="modal-close" onclick="Modal.close('statusModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">状态</label>
+                    <select class="form-input" v-model="statusForm.status">
+                        <option value="1">待查看</option>
+                        <option value="2">已查看</option>
+                        <option value="3">面试通知</option>
+                        <option value="4">已拒绝</option>
+                        <option value="5">已录取</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">备注</label>
+                    <textarea class="form-textarea" v-model="statusForm.remark" rows="3" placeholder="选填"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="Modal.close('statusModal')">取消</button>
+                <button class="btn btn-primary" @click="saveStatus" :disabled="saving">{{ saving?'保存中...':'确定' }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data() {
+            return {
+                apps: [],
+                statusFilter: null,
+                page: 1,
+                size: 10,
+                total: 0,
+                saving: false,
+                statusForm: { id: null, status: 2, remark: '' }
+            }
+        },
+        mounted() {
+            const user = initLayout('admin');
+            if (!user) return;
+            this.loadData();
+        },
+        methods: {
+            async loadData() {
+                this.loading = true;
+                try {
+                    const params = { page: this.page, size: this.size };
+                    if (this.statusFilter) params.status = this.statusFilter;
+                    const res = await Api.get('admin/application/list', params);
+                    if (res.code === 200) {
+                        this.apps = res.data.records || [];
+                        this.total = res.data.total || 0;
+                    }
+                } catch (e) {
+                    console.error(e);
+                    Toast.error('加载失败');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            search() {
+                this.page = 1;
+                this.loadData();
+            },
+            openStatusModal(a) {
+                this.statusForm = { id: a.id, status: a.status, remark: a.remark || '' };
+                Modal.open('statusModal');
+            },
+            async saveStatus() {
+                this.saving = true;
+                try {
+                    let url = 'admin/application/' + this.statusForm.id + '/status?status=' + this.statusForm.status;
+                    if (this.statusForm.remark) url += '&remark=' + encodeURIComponent(this.statusForm.remark);
+                    const res = await Api.put(url);
+                    if (res.code === 200) {
+                        Toast.success('状态已更新');
+                        Modal.close('statusModal');
+                        this.loadData();
+                    } else {
+                        Toast.error(res.message || '操作失败');
+                    }
+                } catch (e) {
+                    Toast.error('网络错误');
+                } finally {
+                    this.saving = false;
+                }
+            },
+            async exportApps() {
+                try {
+                    const token = Auth.getToken();
+                    const res = await fetch('/api/admin/application/export', {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'apps_export.xlsx';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        Toast.success('导出成功');
+                    } else {
+                        Toast.error('导出失败');
+                    }
+                } catch (e) {
+                    Toast.error('导出失败');
+                }
+            },
+            formatDate(d){
+                if(!d) return '';
+                const date = new Date(d);
+                const pad = n=>String(n).padStart(2,'0');
+                return date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate())+' '+pad(date.getHours())+':'+pad(date.getMinutes());
+            },
+            getStatusText(s){
+                const map = {1:'待查看',2:'已查看',3:'面试通知',4:'已拒绝',5:'已录取'};
+                return map[s] || '未知';
+            },
+            getStatusClass(s){
+                const map = {1:'badge-pending',2:'badge-viewed',3:'badge-interview',4:'badge-rejected',5:'badge-accepted'};
+                return map[s] || 'badge-info';
+            },
+            getMatchClass(s){
+                if(s>=80) return 'high';
+                if(s>=60) return 'mid';
+                return 'low';
+            }
+        }
+    });
+</script>
+</body>
+</html>

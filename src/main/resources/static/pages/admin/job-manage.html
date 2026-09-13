@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>岗位管理 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo"><h2>ResumeMatch</h2><span>管理后台</span></div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info" onclick="location.href='/pages/admin/profile.html'">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'A' }}</div>
+                <div><div class="user-name">{{ currentUser?.realName || '管理员' }}</div><div class="user-role">系统管理员</div></div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">岗位管理</div>
+            <div class="topbar-actions">
+                <button class="btn btn-primary btn-sm" @click="openCreate">+ 新增岗位</button>
+                <button class="btn btn-outline btn-sm" onclick="Auth.logout()">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+
+            <h3 style="font-size:18px;font-weight:600;margin-bottom:16px">岗位列表</h3>
+
+            <div class="card" v-if="jobs.length">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>岗位名称</th>
+                            <th>公司</th>
+                            <th>地点</th>
+                            <th>薪资</th>
+                            <th>经验要求</th>
+                            <th>学历要求</th>
+                            <th>分类</th>
+                            <th>操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr v-for="j in jobs" :key="j.id">
+                            <td>{{ j.id }}</td>
+                            <td>{{ j.title }}</td>
+                            <td>{{ j.company }}</td>
+                            <td>{{ j.location || '--' }}</td>
+                            <td>{{ j.salary || '面议' }}</td>
+                            <td>{{ j.experience || '--' }}</td>
+                            <td>{{ j.education || '--' }}</td>
+                            <td>{{ j.category || '--' }}</td>
+                            <td>
+                                <button class="btn btn-outline btn-sm" @click="openEdit(j)">编辑</button>
+                                <button class="btn btn-danger btn-sm ml-8" @click="deleteJob(j)">删除</button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="empty-state" v-else-if="!loading">
+                <div class="empty-icon">💼</div>
+                <div class="empty-text">暂无岗位数据</div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="jobModal" style="display:none">
+        <div class="modal-box" style="width:640px;max-height:90vh;overflow-y:auto">
+            <div class="modal-header">
+                <h3>{{ isEdit ? '编辑岗位' : '新增岗位' }}</h3>
+                <button class="modal-close" onclick="Modal.close('jobModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">岗位名称 *</label>
+                    <input class="form-input" v-model="form.title">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">公司名称 *</label>
+                    <input class="form-input" v-model="form.company">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">工作地点</label>
+                    <input class="form-input" v-model="form.location">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">薪资范围</label>
+                    <input class="form-input" v-model="form.salary" placeholder="如：15K-25K">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">经验要求</label>
+                    <input class="form-input" v-model="form.experience">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">学历要求</label>
+                    <input class="form-input" v-model="form.education">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">岗位分类</label>
+                    <input class="form-input" v-model="form.category">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">岗位描述</label>
+                    <textarea class="form-textarea" v-model="form.description" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="Modal.close('jobModal')">取消</button>
+                <button class="btn btn-primary" @click="saveJob">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data() {
+            return {
+                jobs: [],
+                isEdit: false,
+                form: {}
+            }
+        },
+        mounted() {
+            const user = initLayout('admin');
+            if (!user) return;
+            this.loadData();
+        },
+        methods: {
+            async loadData() {
+                this.loading = true;
+                try {
+                    const res = await Api.get('admin/job/all');
+                    if (res.code === 200) {
+                        this.jobs = res.data || [];
+                    }
+                } catch (e) {
+                    Toast.error('加载失败');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            openCreate() {
+                this.isEdit = false;
+                this.form = {};
+                Modal.open('jobModal');
+            },
+            openEdit(row) {
+                this.isEdit = true;
+                this.form = { ...row };
+                Modal.open('jobModal');
+            },
+            async saveJob() {
+                try {
+                    if (this.isEdit) {
+                        await Api.put('admin/job/' + this.form.id, this.form);
+                    } else {
+                        await Api.post('admin/job', this.form);
+                    }
+                    Toast.success('保存成功');
+                    Modal.close('jobModal');
+                    this.loadData();
+                } catch (e) {
+                    Toast.error('保存失败');
+                }
+            },
+            async deleteJob(row) {
+                if (!confirm('确定删除？')) return;
+                try {
+                    await Api.delete('admin/job/' + row.id);
+                    this.loadData();
+                    Toast.success('删除成功');
+                } catch (e) {
+                    Toast.error('删除失败');
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

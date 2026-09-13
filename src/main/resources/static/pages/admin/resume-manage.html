@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简历管理 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo"><h2>ResumeMatch</h2><span>管理后台</span></div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info" onclick="location.href='/pages/admin/profile.html'">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'A' }}</div>
+                <div><div class="user-name">{{ currentUser?.realName || '管理员' }}</div><div class="user-role">系统管理员</div></div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">简历管理</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" @click="exportResumes">导出Excel</button>
+                <button class="btn btn-outline btn-sm" onclick="Auth.logout()">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+
+            <h3 style="font-size:18px;font-weight:600;margin-bottom:16px">简历列表</h3>
+
+            <div class="card" v-if="resumes.length">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr><th>ID</th><th>标题</th><th>文件名</th><th>所属用户</th><th>版本</th><th>匹配分数</th><th>上传时间</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                        <tr v-for="r in resumes" :key="r.id">
+                            <td>{{ r.id }}</td><td>{{ r.title || '--' }}</td><td>{{ r.fileName || '--' }}</td>
+                            <td>{{ r.userName || '--' }}</td><td>v{{ r.currentVersion || 1 }}</td>
+                            <td>
+                                <span class="match-score" :class="$utils.getMatchClass(r.matchScore||0)" v-if="r.matchScore">{{ r.matchScore }}</span>
+                                <span v-else>--</span>
+                            </td>
+                            <td>{{ $utils.formatDate(r.createTime) }}</td>
+                            <td>
+                                <button class="btn btn-outline btn-sm" @click="viewContent(r)">查看</button>
+                                <button class="btn btn-outline btn-sm ml-8" @click="downloadResume(r)" v-if="r.fileUrl">下载</button>
+                                <button class="btn btn-danger btn-sm ml-8" @click="deleteResume(r)">删除</button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="empty-state" v-else-if="!loading">
+                <div class="empty-icon">📄</div>
+                <div class="empty-text">暂无简历数据</div>
+                <div class="empty-hint">求职者上传简历后在此处查看，或检查后端API是否正常</div>
+            </div>
+
+            <div class="pagination" v-if="total > size">
+                <button class="btn btn-outline btn-sm" :disabled="page<=1" @click="page--;loadData()">上一页</button>
+                <span class="page-info">{{ page }} / {{ Math.ceil(total/size)||1 }}</span>
+                <button class="btn btn-outline btn-sm" :disabled="page>=Math.ceil(total/size)" @click="page++;loadData()">下一页</button>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="contentModal" style="display:none">
+        <div class="modal-box" style="width:700px;max-height:85vh;overflow-y:auto">
+            <div class="modal-header">
+                <h3>{{ viewResume?.title || '简历内容' }}</h3>
+                <button class="modal-close" onclick="Modal.close('contentModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="white-space:pre-wrap;font-size:13px;line-height:1.8;color:var(--text-secondary);max-height:60vh;overflow-y:auto">{{ viewResume?.content || '无内容' }}</div>
+                <div class="mt-12" style="font-size:12px;color:var(--text-muted)" v-if="viewResume?.skills">
+                    技能：<span class="tag tag-primary" v-for="s in parseSkills(viewResume.skills)" :key="s" style="margin:2px">{{ s }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data(){
+            return {
+                loading: false,
+                resumes:[],
+                page:1,
+                size:10,
+                total:0,
+                viewResume:null
+            };
+        },
+        mounted(){
+            const user = initLayout('admin');
+            if(!user) return;
+            this.loadData();
+        },
+        methods:{
+            async loadData(){
+                this.loading = true;
+                try{
+                    const res = await Api.get('admin/resume/list', { page:this.page, size:this.size });
+                    if(res.code === 200){ this.resumes = res.data.records || []; this.total = res.data.total || 0; }
+                    else console.error('[resume-manage] API error:', res);
+                } catch(e){ console.error('[resume-manage] request failed:', e); Toast.error('加载失败，请检查后端是否启动'); }
+                finally { this.loading = false; }
+            },
+            viewContent(r){ this.viewResume = r; Modal.open('contentModal'); },
+            parseSkills(s){ if(!s) return []; if(Array.isArray(s)) return s; if(typeof s==='string') return s.split(',').map(x=>x.trim()).filter(Boolean); return []; },
+            downloadResume(r){ if(r.fileUrl) window.open(r.fileUrl,'_blank'); },
+            async deleteResume(r){
+                if(!confirm('确定删除简历 "'+(r.title||r.fileName)+'" 吗？')) return;
+                try{
+                    const res = await Api.delete('resume/'+r.id);
+                    if(res.code===200){ Toast.success('已删除'); this.loadData(); }
+                    else Toast.error(res.message||'删除失败');
+                } catch(e){ Toast.error('网络错误'); }
+            },
+            async exportResumes(){
+                try{
+                    const token = Auth.getToken();
+                    const res = await fetch('/api/admin/resume/export', { headers:{'Authorization':'Bearer '+token} });
+                    if(res.ok){ const blob=await res.blob(); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='resumes_export.xlsx'; a.click(); URL.revokeObjectURL(url); Toast.success('导出成功'); }
+                    else Toast.error('导出失败');
+                } catch(e){ Toast.error('导出失败'); }
+            }
+        }
+    });
+</script>
+</body>
+</html>

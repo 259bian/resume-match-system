@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>我的收藏 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo">
+            <h2>ResumeMatch</h2>
+            <span>简历智能匹配系统</span>
+        </div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'U' }}</div>
+                <div>
+                    <div class="user-name">{{ currentUser?.realName || '用户' }}</div>
+                    <div class="user-role">求职者</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">我的收藏</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" onclick="Auth.logout()">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+
+            <div class="job-grid" v-if="favorites.length">
+                <div class="job-card" v-for="f in favorites" :key="f.jobId || f.id">
+                    <div class="job-title">{{ f.title }}</div>
+                    <div class="job-company">{{ f.company }}</div>
+                    <div class="job-tags">
+                        <span class="tag" v-for="s in (f.skills||'').split(',').filter(i=>i.trim())" :key="s">{{ s.trim() }}</span>
+                    </div>
+                    <div class="job-meta">
+                        <span>📍 {{ f.location || '不限' }}</span>
+                        <span>📅 {{ f.experience || '不限' }}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+                        <span class="job-salary">{{ $utils.formatSalary(f.salary) }}</span>
+                        <button class="btn btn-outline btn-sm" @click.stop="removeFavorite(f.jobId || f.id)">取消收藏</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="empty-state" v-else-if="!loading">
+                <div class="empty-icon">⭐</div>
+                <div class="empty-text">暂无收藏</div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data() {
+            return {
+                favorites: []
+            };
+        },
+        mounted() {
+            const user = initLayout('user');
+            if (!user) return;
+            this.loadData();
+        },
+        methods: {
+            async loadData() {
+                this.loading = true;
+                try {
+                    const res = await Api.get('favorite/my', { page:1, size:100 });
+                    if (res.code === 200) {
+                        this.favorites = res.data.records || [];
+                    }
+                } catch (e) {
+                    Toast.error('加载失败');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async removeFavorite(jobId) {
+                if (!confirm('确定取消收藏？')) return;
+                try {
+                    const res = await Api.delete('favorite/' + jobId);
+                    if (res.code === 200) {
+                        Toast.success('已取消收藏');
+                        this.loadData();
+                    } else {
+                        Toast.error(res.message || '操作失败');
+                    }
+                } catch (e) {
+                    Toast.error('操作失败');
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

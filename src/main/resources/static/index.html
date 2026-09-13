@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+    <style>
+        .landing{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a,#1e293b,#0f172a);color:#fff;text-align:center}
+        .landing-inner h1{font-size:48px;font-weight:800;background:linear-gradient(135deg,#4f6ef6,#7c5cfc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px}
+        .landing-inner p{font-size:18px;color:#94a3b8;margin-bottom:40px}
+    </style>
+</head>
+<body>
+<div class="landing">
+    <div class="landing-inner">
+        <h1>ResumeMatch</h1>
+        <p>简历优化 · 智能匹配 · 高效求职</p>
+        <a href="/pages/login.html" class="btn btn-primary btn-lg" style="font-size:16px;padding:14px 48px">进入系统</a>
+    </div>
+</div>
+<script src="/js/common.js"></script>
+<script>
+(function(){
+    if (Auth.isLoggedIn()) {
+        var u = Auth.getUser();
+        location.href = u && u.role === 1 ? '/pages/admin/dashboard.html' : '/pages/user/job-list.html';
+        /*
+        已登录 + role=1(管理员) → 跳转 /pages/admin/dashboard.html
+        已登录 + role=0(用户)   → 跳转 /pages/user/job-list.html
+         */
+    }
+})();
+</script>
+</body>
+</html>

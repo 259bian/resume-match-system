@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>岗位详情 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo">
+            <h2>ResumeMatch</h2>
+            <span>简历智能匹配系统</span>
+        </div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'U' }}</div>
+                <div>
+                    <div class="user-name">{{ currentUser?.realName || '用户' }}</div>
+                    <div class="user-role">求职者</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">岗位详情</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" onclick="history.back()">返回</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+
+            <div v-if="job">
+                <div class="detail-header">
+                    <h2>{{ job.title }}</h2>
+                    <div class="company-line">{{ job.company }}</div>
+                    <div class="meta-line">
+                        <span>💰 {{ $utils.formatSalary(job.salary) }}</span>
+                        <span>📍 {{ job.location || '不限' }}</span>
+                        <span>📅 {{ job.experience || '不限' }}</span>
+                        <span>🎓 {{ job.education || '不限' }}</span>
+                        <span>👁 {{ job.viewCount || 0 }} 次浏览</span>
+                    </div>
+                    <div style="margin-top:16px;display:flex;gap:12px">
+                        <button class="btn btn-primary btn-lg" @click="showApplyModal = true">投递简历</button>
+                        <button class="btn btn-outline btn-lg" @click="toggleFavorite">
+                            {{ job.isFavorite ? '❤️ 已收藏' : '🤍 收藏' }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="detail-section" v-if="job.skills">
+                    <h3>技能要求</h3>
+                    <div class="skill-cloud">
+                        <span class="skill-tag" v-for="s in (job.skills||'').split(',').filter(i=>i.trim())" :key="s">{{ s.trim() }}</span>
+                    </div>
+                </div>
+
+                <div class="detail-section" v-if="job.description">
+                    <h3>岗位描述</h3>
+                    <div class="content">{{ job.description }}</div>
+                </div>
+
+                <div class="detail-section" v-if="job.requirements">
+                    <h3>任职要求</h3>
+                    <div class="content">{{ job.requirements }}</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Apply Modal -->
+    <div class="modal-overlay" v-if="showApplyModal" @click.self="showApplyModal=false">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>选择简历投递</h3>
+                <button class="modal-close" @click="showApplyModal=false">✕</button>
+            </div>
+            <div class="modal-body">
+                <div v-if="resumes.length === 0" class="empty-state">
+                    <div class="empty-text">暂无简历，请先上传</div>
+                </div>
+                <div v-for="r in resumes" :key="r.id"
+                     style="padding:12px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:10px;cursor:pointer"
+                     :style="selectedResume === r.id ? 'border-color:var(--primary);background:var(--info-light)' : ''"
+                     @click="selectedResume = r.id">
+                    <div style="font-weight:600">{{ r.title }}</div>
+                    <div class="text-sm text-muted">版本 {{ r.currentVersion }} · {{ $utils.formatDate(r.createTime) }}</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @click="showApplyModal=false">取消</button>
+                <button class="btn btn-primary" @click="applyJob" :disabled="!selectedResume || applying">
+                    {{ applying ? '投递中...' : '确认投递' }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data() {
+            return {
+                job: null,
+                resumes: [],
+                showApplyModal: false,
+                selectedResume: null,
+                applying: false,
+                loading: false
+            };
+        },
+        mounted() {
+            const user = initLayout('user');
+            if (!user) return;
+            this.loadJob();
+        },
+        methods: {
+            async loadJob() {
+                const id = getQueryParam('id');
+                if (!id) {
+                    Toast.error('缺少岗位ID');
+                    return;
+                }
+                this.loading = true;
+                try {
+                    const res = await Api.get('job/' + id);
+                    if (res.code === 200) {
+                        this.job = res.data;
+                    }
+                } catch (e) {
+                    Toast.error('加载失败');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async toggleFavorite() {
+                if (!this.job) return;
+                try {
+                    if (this.job.isFavorite) {
+                        await Api.delete('favorite/' + this.job.id);
+                        this.job.isFavorite = false;
+                        Toast.success('已取消收藏');
+                    } else {
+                        await Api.post('favorite/' + this.job.id);
+                        this.job.isFavorite = true;
+                        Toast.success('已收藏');
+                    }
+                } catch (e) {
+                    Toast.error('操作失败');
+                }
+            },
+            async loadResumes() {
+                try {
+                    const res = await Api.get('resume/my', { page: 1, size: 100 });
+                    if (res.code === 200) {
+                        this.resumes = res.data.records || [];
+                    }
+                } catch (e) {
+                    console.error("加载简历失败", e);
+                }
+            },
+            async applyJob() {
+                if (!this.selectedResume || !this.job) return;
+                this.applying = true;
+                try {
+                    const res = await Api.post('application', {
+                        jobId: this.job.id,
+                        resumeId: this.selectedResume
+                    });
+                    if (res.code === 200) {
+                        Toast.success('投递成功！匹配度：' + (res.data.matchScore || '--') + '分');
+                        this.showApplyModal = false;
+                    } else {
+                        Toast.error(res.message);
+                    }
+                } catch (e) {
+                    Toast.error('投递失败');
+                } finally {
+                    this.applying = false;
+                }
+            }
+        },
+        watch: {
+            showApplyModal(val) {
+                if (val) {
+                    this.loadResumes();
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

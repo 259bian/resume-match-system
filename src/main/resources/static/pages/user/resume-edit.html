@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>简历编辑 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo"><h2>ResumeMatch</h2><span>简历智能匹配系统</span></div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'U' }}</div>
+                <div>
+                    <div class="user-name">{{ currentUser?.realName || '用户' }}</div>
+                    <div class="user-role">{{ currentUser?.role === 1 ? '管理员' : '求职者' }}</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">简历编辑</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" onclick="history.back()">返回</button>
+                <button class="btn btn-outline btn-sm" @click="logout">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+            <div v-if="resume">
+                <div class="card mb-20">
+                    <div class="card-header"><h3>基本信息</h3></div>
+                    <div class="card-body">
+                        <div class="form-group"><label class="form-label">简历标题</label><input class="form-input" v-model="resume.title"></div>
+                        <div class="form-row">
+                            <div class="form-group"><label class="form-label">文件名</label><input class="form-input" :value="resume.fileName" disabled></div>
+                            <div class="form-group"><label class="form-label">版本</label><input class="form-input" :value="'v'+resume.currentVersion" disabled></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card mb-20">
+                    <div class="card-header"><h3>简历内容</h3></div>
+                    <div class="card-body">
+                        <textarea class="form-textarea" v-model="resume.content" rows="15"></textarea>
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-lg" @click="saveResume">保存修改</button>
+
+                <div class="card mt-20" v-if="versions.length">
+                    <div class="card-header"><h3>版本历史</h3></div>
+                    <div class="card-body">
+                        <div v-for="v in versions" :key="v.id" class="flex-between mb-12" style="padding:10px;background:var(--bg);border-radius:8px">
+                            <div>
+                                <span style="font-weight:600">版本 {{ v.version }}</span>
+                                <span class="badge badge-success ml-8" v-if="v.isCurrent">当前</span>
+                                <span class="text-sm text-muted ml-8">{{ $utils.formatDate(v.createTime) }}</span>
+                            </div>
+                            <button class="btn btn-outline btn-sm" @click="switchVersion(v.version)" v-if="!v.isCurrent">切换到此版本</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data() {
+            return {
+                currentUser: null,
+                resume: null,
+                versions: [],
+                loading: false
+            };
+        },
+        mounted() {
+            const user = initLayout('user');
+            if (!user) return;
+            this.currentUser = user;
+            const id = getQueryParam('id');
+            if (id) this.loadResume(id);
+        },
+        methods: {
+            async loadResume(id) {
+                this.loading = true;
+                try {
+                    const [res, verRes] = await Promise.all([
+                        Api.get('resume/' + id),
+                        Api.get('resume/' + id + '/versions')
+                    ]);
+                    if (res.code === 200) this.resume = res.data;
+                    if (verRes.code === 200) this.versions = verRes.data || [];
+                } catch(e) {
+                    Toast.error('加载失败');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            async saveResume() {
+                if (!this.resume) return;
+                try {
+                    const res = await Api.put('resume/' + this.resume.id, {
+                        title: this.resume.title,
+                        content: this.resume.content
+                    });
+                    if (res.code === 200) {
+                        Toast.success('保存成功');
+                        this.loadResume(this.resume.id);
+                    } else {
+                        Toast.error(res.message);
+                    }
+                } catch (e) {
+                    Toast.error('保存失败');
+                }
+            },
+            async switchVersion(v) {
+                if (!confirm('确定切换到版本 ' + v + '？当前内容将被覆盖')) return;
+                try {
+                    const res = await Api.put('resume/' + this.resume.id + '/version/' + v);
+                    if (res.code === 200) {
+                        Toast.success('版本切换成功');
+                        this.loadResume(this.resume.id);
+                    } else {
+                        Toast.error(res.message);
+                    }
+                } catch (e) {
+                    Toast.error('操作失败');
+                }
+            },
+            logout() {
+                if (confirm('确定要退出登录吗？')) {
+                    Toast.success('已退出登录');
+                    setTimeout(() => Auth.logout(), 500);
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

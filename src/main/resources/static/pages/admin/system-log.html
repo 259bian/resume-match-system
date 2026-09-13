@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统日志 - 简历智能匹配系统</title>
+    <link rel="stylesheet" href="/css/common.css">
+</head>
+<body>
+<div id="app" class="app-layout">
+    <aside class="app-sidebar">
+        <div class="sidebar-logo"><h2>ResumeMatch</h2><span>管理后台</span></div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <div class="sidebar-footer">
+            <div class="user-info" onclick="location.href='/pages/admin/profile.html'">
+                <div class="user-avatar">{{ currentUser?.realName?.[0] || 'A' }}</div>
+                <div><div class="user-name">{{ currentUser?.realName || '管理员' }}</div><div class="user-role">系统管理员</div></div>
+            </div>
+        </div>
+    </aside>
+    <main class="app-main">
+        <header class="app-topbar">
+            <div class="topbar-breadcrumb">系统日志</div>
+            <div class="topbar-actions">
+                <button class="btn btn-outline btn-sm" @click="exportLogs">导出Excel</button>
+                <button class="btn btn-outline btn-sm" onclick="Auth.logout()">退出登录</button>
+            </div>
+        </header>
+        <div class="app-content">
+            <div class="loading-overlay" v-if="loading"><div class="spinner"></div></div>
+
+            <h3 style="font-size:18px;font-weight:600;margin-bottom:16px">操作日志</h3>
+
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                <input class="form-input" v-model="keyword" placeholder="搜索操作用户/操作类型/请求方法" style="width:300px" @keyup.enter="search">
+                <button class="btn btn-primary btn-sm" @click="search">搜索</button>
+                <button class="btn btn-outline btn-sm" @click="keyword='';search()">重置</button>
+            </div>
+
+            <div class="card" v-if="logs.length">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr><th>ID</th><th>操作用户</th><th>操作类型</th><th>请求方法</th><th>IP地址</th><th>操作时间</th></tr>
+                        </thead>
+                        <tbody>
+                        <tr v-for="l in logs" :key="l.id">
+                            <td>{{ l.id }}</td><td>{{ l.username || '--' }}</td>
+                            <td><span class="badge" :class="getLogTypeClass(l.operation)">{{ l.operation || '--' }}</span></td>
+                            <td>{{ l.method || '--' }}</td><td>{{ l.ip || '--' }}</td>
+                            <td>{{ $utils.formatDate(l.createTime) }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="empty-state" v-else-if="!loading">
+                <div class="empty-icon">📝</div>
+                <div class="empty-text">暂无日志记录</div>
+                <div class="empty-hint">系统操作日志会在此处显示，或检查后端API是否正常</div>
+            </div>
+
+            <div class="pagination" v-if="total > size">
+                <button class="btn btn-outline btn-sm" :disabled="page<=1" @click="page--;loadData()">上一页</button>
+                <span class="page-info">{{ page }} / {{ Math.ceil(total/size)||1 }}</span>
+                <button class="btn btn-outline btn-sm" :disabled="page>=Math.ceil(total/size)" @click="page++;loadData()">下一页</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="/js/common.js"></script>
+<script>
+    createVueApp({
+        data(){
+            return {
+                loading: false,
+                logs:[],
+                keyword:'',
+                page:1,
+                size:10,
+                total:0
+            };
+        },
+        mounted(){
+            const user = initLayout('admin');
+            if(!user) return;
+            this.loadData();
+        },
+        methods:{
+            async loadData(){
+                this.loading = true;
+                try{
+                    const params = { page:this.page, size:this.size };
+                    if(this.keyword) params.keyword = this.keyword;
+                    const res = await Api.get('admin/log/list', params);
+                    if(res.code === 200){ this.logs = res.data.records || []; this.total = res.data.total || 0; }
+                    else console.error('[sys-log] API error:', res);
+                } catch(e){ console.error('[sys-log] request failed:', e); Toast.error('加载失败，请检查后端是否启动'); }
+                finally { this.loading = false; }
+            },
+            search(){ this.page = 1; this.loadData(); },
+            getLogTypeClass(t){
+                if(!t) return 'badge-info';
+                const s = String(t).toLowerCase();
+                if(s.includes('login')) return 'badge-info';
+                if(s.includes('delete')) return 'badge-danger';
+                if(s.includes('create')||s.includes('新增')) return 'badge-success';
+                if(s.includes('update')||s.includes('修改')) return 'badge-warning';
+                return 'badge-info';
+            },
+            async exportLogs(){
+                try{
+                    const token = Auth.getToken();
+                    const res = await fetch('/api/admin/log/export', { headers:{'Authorization':'Bearer '+token} });
+                    if(res.ok){ const blob=await res.blob(); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='logs_export.xlsx'; a.click(); URL.revokeObjectURL(url); Toast.success('导出成功'); }
+                    else Toast.error('导出失败');
+                } catch(e){ Toast.error('导出失败'); }
+            }
+        }
+    });
+</script>
+</body>
+</html>
