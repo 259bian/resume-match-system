@@ -1,69 +1,115 @@
-项目简介：
-简历优化与岗位智能匹配系统是一站式智能求职平台，面向应届生、职场转型求职者与企业 HR。
-针对传统求职市场痛点：求职者简历撰写不专业、盲目海投面试转化率低；企业 HR 人工筛选简历成本高、关键词检索无法理解深层语义。
-系统实现简历文档解析、AI 简历优化、人岗智能匹配、岗位收藏、简历投递全流程闭环；管理员端提供用户 / 岗位 / 简历管理、投递状态流转、数据可视化大屏、操作日志审计，提升求职与招聘两端效率。
+# ResumeMatch 简历智能匹配系统
 
-技术栈：
-后端：
-框架：SpringBoot 3.2.5 + SpringMVC + MyBatis‑Plus 3.5
-数据库：MySQL8
-安全认证：JWT 身份认证、全局拦截器权限控制
-AI 能力：DeepSeek 大模型 API，定制 HR 场景 Prompt 工程
-文件存储：阿里云 OSS 对象存储
-文档解析：POI、PDFBox，支持 PDF/Word 简历解析
-开发工具：IDEA 2025
-前端：
-Vue3 + Element‑Plus + Axios
-ECharts：实现管理后台数据可视化大屏
-其他：
-工程规范：`.gitignore`过滤 IDE 配置、编译产物、依赖包，仓库仅保留源码
-全局统一异常处理、RESTful 接口设计
+> 招聘场景 Web 业务系统｜SpringBoot 后端｜MySQL 数据库｜AI 人岗匹配
 
-核心功能模块：
-求职者端：
-1.用户中心：账号注册登录、JWT 身份认证，个人信息维护
-2.简历中心：PDF/Word 简历上传解析；简历多版本快照管理，支持历史版本查看、回退
-3.AI 智能服务：大模型驱动简历优化；双层算法实现简历‑岗位智能匹配，输出匹配分数与优化建议
-4.求职广场：岗位多条件筛选、关键词搜索、岗位收藏
-5.投递管理：一键投递简历，完整跟踪投递状态（待查看 / 已查看 / 面试通知 / 拒绝 / 录用），消息通知推送
-管理员端：
-1.数据可视化大屏：展示注册用户数、简历总量、岗位数量、投递统计、岗位需求排行、投递趋势图表
-2.用户管理：用户账号查询、账号启用 / 禁用
-3.岗位管理：岗位信息增删改查、岗位审核发布
-4.简历管理：简历检索筛选，投递记录批量导出 Excel
-5.投递处理：更新投递流转状态，填写面试、拒绝备注
-6.系统监控：全量操作日志记录、日志查询审计
+## 项目简介
 
-项目目录结构：
-resume‑match‑system
-├── frontend                # Vue3前端工程
-├── backend                 # SpringBoot后端（IDEA2025）
-│   ├── controller          # 接口层，接收前端http请求
-│   ├── service             # 业务逻辑层：AI匹配、简历解析、投递业务
-│   ├── mapper              # MyBatis‑Plus数据库操作层
-│   ├── entity              # 数据库实体类
-│   ├── config              # 配置类：JWT拦截器、OSS、DeepSeekAI、跨域配置
-│   ├── common              # 工具类、统一返回封装、全局异常处理器
-│   └── ResumeJobMatchSystemApplication.java  # SpringBoot启动类
-├── doc                     # 数据库SQL脚本、接口文档
-└── README.md               # 项目说明文档
+ResumeMatch 是面向招聘业务场景的 Web 系统，包含求职者端与管理员端，覆盖简历管理、岗位管理、AI 简历优化、人岗匹配、投递管理和后台运营等功能。
 
-数据库设计：
-数据库名称：`resume_match_db`，MySQL8，采用逻辑删除`deleted`字段、统一`create_time/update_time`时间戳字段，保证数据可追溯。
-数据表清单：
-1. `user` 用户表：区分求职者/管理员角色，账号权限管理
-2. `resume` 简历主表：简历基础信息、OSS简历文件地址，关联用户ID
-3. `resume_version` 简历版本表：简历修改快照，支持简历历史版本回退
-4. `resume_skill` 简历技能中间表：简历与技能标签多对多关联
-5. `skill_tag` 技能标签表：标准化技能词库，用于岗位简历相似度计算
-6. `job` 岗位表：岗位基础信息、任职要求、岗位发布状态
-7. `application` 投递记录表：用户投递岗位记录，维护投递状态流转
-8. `favorite` 岗位收藏表：用户收藏岗位多对多关系表
-9. `match_result` AI匹配结果表：存储简历岗位匹配分数、AI评语与优化建议
-10. `notification` 消息通知表：投递变更、面试通知消息推送
-11. `operation_log` 操作日志表：管理员后台操作审计日志
+本人项目角色为**后端开发**，重点负责数据库设计、业务接口开发、AI 能力集成以及接口与业务效果验证。
 
- 后续迭代展望：
-1. 接入 RAG 检索增强生成，导入行业岗位知识库，进一步提升 AI 匹配与简历优化质量
-2. 新增视频简历解析功能
-3. 开发微信小程序端，拓展移动端访问入口
+## 我的主要工作
+
+### 1. 数据库设计
+独立完成 **11 张业务数据表**结构设计，完成实体关系建模，并通过索引优化查询、事务保障数据一致性。
+
+主要表包括：`user`、`resume`、`resume_version`、`resume_skill`、`skill_tag`、`job`、`application`、`favorite`、`match_result`、`notification`、`operation_log`。
+
+### 2. 后端接口开发
+基于 SpringBoot 开发 **20+ REST 风格业务接口**，覆盖简历投递、岗位收藏、状态流转、Excel 批量导出、用户管理、岗位管理、简历管理、投递处理和操作日志等业务。
+
+### 3. AI 能力集成
+封装 DeepSeek 大模型 API，完成大模型能力与招聘业务结合；设计加权人岗匹配逻辑，输出匹配结果及优化建议。
+
+### 4. 接口与业务验证
+使用 Postman 进行接口调试与验证，参与完整招聘业务流程联调，对 AI 功能进行业务效果验证，并整理项目文档。
+
+## 技术栈
+
+**后端：** SpringBoot 3.2.5、SpringMVC、MyBatis-Plus 3.5、Java、RESTful API  
+**数据库：** MySQL 8、ER/EER 建模、索引、事务、逻辑删除  
+**安全与基础设施：** JWT、全局拦截器、阿里云 OSS  
+**AI：** DeepSeek API、Prompt、加权人岗匹配  
+**文档与开发：** POI、PDFBox、Git、IDEA、Postman  
+**前端：** Vue 3、Element-Plus、Axios、ECharts
+
+## 核心功能
+
+### 求职者端
+1. 注册登录与 JWT 身份认证
+2. 个人信息维护
+3. PDF / Word 简历上传解析
+4. 简历多版本快照管理
+5. AI 简历优化
+6. AI 人岗匹配
+7. 岗位搜索与筛选
+8. 岗位收藏
+9. 简历投递
+10. 投递状态跟踪
+11. 消息通知
+
+### 管理员端
+1. 数据可视化大屏
+2. 用户管理
+3. 岗位管理
+4. 简历检索
+5. 投递记录管理
+6. Excel 批量导出
+7. 投递状态处理
+8. 操作日志审计
+
+## 数据库设计
+
+数据库：`resume_match_db`
+
+| 表 | 说明 |
+|---|---|
+| `user` | 用户与角色权限 |
+| `resume` | 简历主表 |
+| `resume_version` | 简历历史版本 |
+| `resume_skill` | 简历与技能标签关联 |
+| `skill_tag` | 技能标签 |
+| `job` | 岗位信息 |
+| `application` | 投递记录 |
+| `favorite` | 岗位收藏 |
+| `match_result` | AI 人岗匹配结果 |
+| `notification` | 消息通知 |
+| `operation_log` | 操作审计日志 |
+
+统一使用 `create_time / update_time` 时间字段，并采用 `deleted` 字段实现逻辑删除。
+
+## 项目结构
+
+```text
+resume-match-system
+├── frontend
+├── backend
+│   ├── controller
+│   ├── service
+│   ├── mapper
+│   ├── entity
+│   ├── config
+│   ├── common
+│   └── ResumeJobMatchSystemApplication.java
+├── docs
+│   ├── images
+│   └── sql
+└── README.md
+```
+
+## 项目成果
+
+- 完成招聘业务后端服务搭建
+- 完成 11 张业务数据表设计
+- 完成 20+ REST API 开发
+- 完成 DeepSeek AI 能力集成
+- 实现简历、岗位、投递、匹配等完整业务闭环
+- 业务数据出错率控制在 **0.5% 以内**
+
+## 后续计划
+
+- 接入 RAG 检索增强生成
+- 引入行业岗位知识库
+- 进一步提升 AI 匹配与简历优化效果
+- 增加视频简历解析
+- 拓展微信小程序端
